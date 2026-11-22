@@ -13,3 +13,7 @@ if (!buf.subarray(0, 8).equals(PNG_MAGIC)) {
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 mkdirSync(outDir, { recursive: true });
 copyFileSync(src, join(outDir, "entry.png"));
+const written = readFileSync(join(outDir, "entry.png"));
+if (!written.equals(buf)) {
+  throw new Error("entry.png copy mismatch: output bytes differ from source");
+}
