@@ -6,26 +6,36 @@
 // in Bahrain, and the Sparta II drone strike in the Gulf of Finland.
 // Deterministic: the same entry.png bytes are copied every run.
 // The image itself is built by the generator from stories-2026-11-22.json.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PNG_SIGNATURE = Buffer.from("89504E470D0A1A0A", "hex");
 
-const here = dirname(fileURLToPath(import.meta.url));
-const source = join(here, "entry.png");
-const bytes = readFileSync(source);
-if (!bytes.subarray(0, 8).equals(PNG_MAGIC)) {
-  throw new Error(
-    "entry.png is not a PNG file (expected magic 89 50 4E 47 0D 0A 1A 0A)",
-  );
+function copyEntry(): void {
+  const source = fileURLToPath(new URL("entry.png", import.meta.url));
+  const payload = fs.readFileSync(source);
+  if (payload.length === 0) {
+    throw new Error("entry.png is empty; refusing to copy");
+  }
+  const ONE_MIB = 1024 * 1024;
+  if (payload.length > ONE_MIB) {
+    throw new Error(
+      `entry.png is ${payload.length} bytes, over the 1 MiB cap; refusing to copy`,
+    );
+  }
+  if (!payload.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    throw new Error("entry.png lacks the PNG signature; refusing to copy");
+  }
+  const outputDirectory = process.env.MAKEFUN_OUTPUT_DIR || "/output";
+  fs.mkdirSync(outputDirectory, { recursive: true });
+  const destination = path.join(outputDirectory, "entry.png");
+  fs.writeFileSync(destination, payload);
+  const roundTripped = fs.readFileSync(destination);
+  if (!roundTripped.equals(payload)) {
+    throw new Error("round-trip mismatch: output differs from entry.png");
+  }
+  console.log(`copied entry.png to ${destination} (${payload.length} bytes)`);
 }
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
-mkdirSync(outDir, { recursive: true });
-const outPath = join(outDir, "entry.png");
-writeFileSync(outPath, bytes);
-const written = readFileSync(outPath);
-if (!written.equals(bytes)) {
-  throw new Error("output bytes differ from entry.png");
-}
-console.log(`wrote ${outPath} (${bytes.length} bytes)`);
+
+copyEntry();
